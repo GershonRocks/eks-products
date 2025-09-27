@@ -123,22 +123,34 @@ pipeline {
                             # Ensure we're in the workspace directory
                             cd "$WORKSPACE_DIR"
 
-                            # Ensure Java is available
-                            export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-                            if [ ! -d "$JAVA_HOME" ]; then
-                                export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-                            fi
-                            if [ ! -d "$JAVA_HOME" ]; then
-                                export JAVA_HOME=/usr/lib/jvm/default-java
-                            fi
-                            if [ ! -d "$JAVA_HOME" ]; then
-                                # Try to find Java
-                                JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java 2>/dev/null) 2>/dev/null)) 2>/dev/null)
-                                if [ -z "$JAVA_HOME" ] || [ ! -d "$JAVA_HOME" ]; then
-                                    echo "Java not found. Please install Java"
-                                    exit 1
+                            # Function to setup Java
+                            setup_java() {
+                                # Try to detect Java automatically first
+                                if command -v java > /dev/null 2>&1; then
+                                    # Try to find JAVA_HOME from java command
+                                    JAVA_PATH=$(readlink -f $(which java) 2>/dev/null || which java)
+                                    if [ ! -z "$JAVA_PATH" ]; then
+                                        export JAVA_HOME=$(dirname $(dirname "$JAVA_PATH"))
+                                        echo "Java found at: $JAVA_HOME"
+                                        return 0
+                                    fi
                                 fi
-                            fi
+
+                                # Fallback to common paths
+                                for JAVA_DIR in /usr/lib/jvm/java-17-openjdk-amd64 /usr/lib/jvm/java-11-openjdk-amd64 /usr/lib/jvm/default-java /usr/lib/jvm/java-*; do
+                                    if [ -d "$JAVA_DIR" ]; then
+                                        export JAVA_HOME="$JAVA_DIR"
+                                        echo "Java found at: $JAVA_HOME"
+                                        return 0
+                                    fi
+                                done
+
+                                echo "Warning: Java not found, trying to continue without JAVA_HOME"
+                                return 1
+                            }
+
+                            # Setup Java
+                            setup_java
 
                             # Set PATH for Maven
                             export PATH=/tmp/apache-maven-3.9.9/bin:$PATH
@@ -239,14 +251,29 @@ pipeline {
                             try {
                                 sh '''
                                     export PATH=/tmp/apache-maven-3.9.9/bin:$PATH
-                                    export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-                                    if [ ! -d "$JAVA_HOME" ]; then
-                                        export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-                                    fi
-                                    if [ ! -d "$JAVA_HOME" ]; then
-                                        export JAVA_HOME=/usr/lib/jvm/default-java
-                                    fi
 
+                                    # Function to setup Java
+                                    setup_java() {
+                                        if command -v java > /dev/null 2>&1; then
+                                            JAVA_PATH=$(readlink -f $(which java) 2>/dev/null || which java)
+                                            if [ ! -z "$JAVA_PATH" ]; then
+                                                export JAVA_HOME=$(dirname $(dirname "$JAVA_PATH"))
+                                                echo "Java found at: $JAVA_HOME"
+                                                return 0
+                                            fi
+                                        fi
+                                        for JAVA_DIR in /usr/lib/jvm/java-17-openjdk-amd64 /usr/lib/jvm/java-11-openjdk-amd64 /usr/lib/jvm/default-java /usr/lib/jvm/java-*; do
+                                            if [ -d "$JAVA_DIR" ]; then
+                                                export JAVA_HOME="$JAVA_DIR"
+                                                echo "Java found at: $JAVA_HOME"
+                                                return 0
+                                            fi
+                                        done
+                                        echo "Warning: Java not found"
+                                        return 1
+                                    }
+
+                                    setup_java
                                     mvn jacoco:report
                                 '''
                                 echo "✅ JaCoCo coverage report generated"
@@ -325,14 +352,29 @@ pipeline {
                             try {
                                 sh '''
                                     export PATH=/tmp/apache-maven-3.9.9/bin:$PATH
-                                    export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-                                    if [ ! -d "$JAVA_HOME" ]; then
-                                        export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-                                    fi
-                                    if [ ! -d "$JAVA_HOME" ]; then
-                                        export JAVA_HOME=/usr/lib/jvm/default-java
-                                    fi
 
+                                    # Function to setup Java
+                                    setup_java() {
+                                        if command -v java > /dev/null 2>&1; then
+                                            JAVA_PATH=$(readlink -f $(which java) 2>/dev/null || which java)
+                                            if [ ! -z "$JAVA_PATH" ]; then
+                                                export JAVA_HOME=$(dirname $(dirname "$JAVA_PATH"))
+                                                echo "Java found at: $JAVA_HOME"
+                                                return 0
+                                            fi
+                                        fi
+                                        for JAVA_DIR in /usr/lib/jvm/java-17-openjdk-amd64 /usr/lib/jvm/java-11-openjdk-amd64 /usr/lib/jvm/default-java /usr/lib/jvm/java-*; do
+                                            if [ -d "$JAVA_DIR" ]; then
+                                                export JAVA_HOME="$JAVA_DIR"
+                                                echo "Java found at: $JAVA_HOME"
+                                                return 0
+                                            fi
+                                        done
+                                        echo "Warning: Java not found"
+                                        return 1
+                                    }
+
+                                    setup_java
                                     mvn org.owasp:dependency-check-maven:check
                                 '''
                                 echo "✅ OWASP dependency check completed"
@@ -365,13 +407,17 @@ pipeline {
             steps {
                 script {
                     echo "🐳 Building Docker image..."
-                    
+
                     try {
+                        // Get Git commit SHA, fallback to 'manual' if not available
+                        def gitCommit = env.GIT_COMMIT ?: 'manual'
+                        def vcsRef = gitCommit == 'manual' ? gitCommit : gitCommit[0..6]
+
                         sh """
                             docker build \
                                 --build-arg VERSION=${APP_VERSION} \
                                 --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
-                                --build-arg VCS_REF=${GIT_COMMIT[0..7]} \
+                                --build-arg VCS_REF=${vcsRef} \
                                 -t ${ECR_REPOSITORY}:${IMAGE_TAG} \
                                 -t ${ECR_REPOSITORY}:latest \
                                 .
