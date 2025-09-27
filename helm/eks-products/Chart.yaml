@@ -1,0 +1,11 @@
+apiVersion: v2
+name: eks-products
+description: Helm chart for EKS Products microservice (ARM64 compatible)
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+dependencies:
+  - name: redis
+    version: "17.11.3"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled

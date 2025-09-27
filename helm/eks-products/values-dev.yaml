@@ -1,0 +1,26 @@
+replicaCount: 1
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: false
+
+persistence:
+  enabled: false
+
+redis:
+  enabled: false
+
+env:
+  - name: SPRING_PROFILES_ACTIVE
+    value: "dev"
+  - name: MANAGEMENT_HEALTH_REDIS_ENABLED
+    value: "false"
+  - name: SPRING_CACHE_TYPE
+    value: "none"

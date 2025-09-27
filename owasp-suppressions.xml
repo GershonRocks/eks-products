@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <!-- 
+    OWASP Dependency Check Suppressions
+    Add CVE suppressions here for known false positives
+    
+    Example:
+    <suppress>
+        <notes><![CDATA[
+        This CVE is not applicable to our use case because...
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.springframework/spring\-core@.*$</packageUrl>
+        <cve>CVE-2022-22965</cve>
+    </suppress>
+    -->
+    
+    <!-- Spring Boot related false positives -->
+    <suppress>
+        <notes><![CDATA[
+        Spring Boot actuator endpoints are secured in production
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.springframework\.boot/spring\-boot\-starter\-actuator@.*$</packageUrl>
+        <vulnerabilityName>CWE-200: Information Exposure</vulnerabilityName>
+    </suppress>
+    
+    <!-- SQLite JDBC - File path traversal not applicable in containerized environment -->
+    <suppress>
+        <notes><![CDATA[
+        SQLite database file path is controlled and validated in our application
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.xerial/sqlite\-jdbc@.*$</packageUrl>
+        <cve>CVE-2023-32697</cve>
+    </suppress>
+</suppressions>

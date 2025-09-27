@@ -1,0 +1,27 @@
+image:
+  repository: eks-products-app
+  tag: "arm64"
+  pullPolicy: IfNotPresent
+
+# Ensure Redis also uses ARM64 image
+redis:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: redis
+    tag: 7-alpine  # Alpine Redis supports ARM64
+
+# Node selector for ARM64 nodes if using mixed cluster
+nodeSelector: {}
+  # kubernetes.io/arch: arm64  # Uncomment if you want to force ARM64 nodes
+
+tolerations: []
+
+# Resources suitable for ARM64
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi

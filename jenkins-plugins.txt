@@ -1,0 +1,56 @@
+# Jenkins Plugins for EKS Products CI/CD Pipeline
+# This file can be used with install-plugins.sh script in Jenkins Docker images
+
+# Core CI/CD Plugins
+workflow-aggregator:latest
+blueocean:latest
+git:latest
+github:latest
+docker-workflow:latest
+build-timeout:latest
+timestamper:latest
+ws-cleanup:latest
+
+# AWS Integration
+pipeline-aws:latest
+amazon-ecr:latest
+aws-credentials-binding:latest
+
+# Quality & Security
+sonar:latest
+dependency-check-jenkins-plugin:latest
+htmlpublisher:latest
+junit:latest
+jacoco:latest
+
+# Notifications
+slack:latest
+email-ext:latest
+mailer:latest
+
+# Kubernetes & Docker
+kubernetes:latest
+kubernetes-credentials-provider:latest
+docker-commons:latest
+docker-build-step:latest
+
+# Utilities
+ansicolor:latest
+build-name-setter:latest
+copyartifact:latest
+credentials:latest
+credentials-binding:latest
+matrix-auth:latest
+role-strategy:latest
+antisamy-markup-formatter:latest
+
+# Maven & Java
+maven-plugin:latest
+pipeline-maven:latest
+config-file-provider:latest
+
+# Monitoring & Reporting
+monitoring:latest
+metrics:latest
+prometheus:latest
+performance:latest

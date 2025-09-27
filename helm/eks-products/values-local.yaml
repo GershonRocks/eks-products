@@ -1,0 +1,14 @@
+service:
+  type: NodePort
+  nodePort: 30080
+
+ingress:
+  enabled: false
+
+persistence:
+  enabled: false
+
+redis:
+  master:
+    persistence:
+      enabled: false

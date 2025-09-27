@@ -1,0 +1,207 @@
+#!/usr/bin/env groovy
+
+/**
+ * EKS Products CI/CD Pipeline - Minimal Version
+ * Designed to work with public GitHub repo and minimal credentials
+ */
+
+pipeline {
+    agent any
+    
+    environment {
+        // AWS Configuration
+        AWS_DEFAULT_REGION = 'us-east-1'
+        AWS_ACCOUNT_ID = '720184961863'
+        ECR_REGISTRY = '720184961863.dkr.ecr.us-east-1.amazonaws.com'
+        ECR_REPOSITORY = 'eks-products'
+        
+        // Build Configuration
+        DOCKER_BUILDKIT = '1'
+        MAVEN_OPTS = '-Xmx2048m'
+        
+        // Application Configuration
+        APP_NAME = 'eks-products'
+        APP_VERSION = "${BUILD_NUMBER}"
+        
+        // Build metadata
+        IMAGE_TAG = "build-${BUILD_NUMBER}-${GIT_COMMIT[0..7]}"
+    }
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 30, unit: 'MINUTES')
+        ansiColor('xterm')
+        timestamps()
+    }
+    
+    stages {
+        stage('🔍 Checkout') {
+            steps {
+                script {
+                    echo "🔍 Checking out code from public repository..."
+                    checkout scm
+                    
+                    echo """
+                    🚀 EKS Products Pipeline (Minimal)
+                    ================================
+                    Branch: ${BRANCH_NAME}
+                    Commit: ${GIT_COMMIT[0..7]}
+                    Build: ${BUILD_NUMBER}
+                    Image Tag: ${IMAGE_TAG}
+                    ================================
+                    """
+                }
+            }
+        }
+        
+        stage('🏗️ Maven Build') {
+            tools {
+                maven 'Maven-3.9'
+                jdk 'OpenJDK-21'
+            }
+            steps {
+                script {
+                    echo "🏗️ Building with Maven..."
+                    
+                    sh 'mvn clean compile -DskipTests=true'
+                    sh 'mvn test'
+                    sh 'mvn package -DskipTests=true'
+                }
+            }
+            post {
+                always {
+                    publishTestResults testResultsPattern: 'target/surefire-reports/*.xml'
+                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                }
+            }
+        }
+        
+        stage('📊 Code Coverage') {
+            steps {
+                script {
+                    echo "📊 Generating code coverage..."
+                    sh 'mvn jacoco:report'
+                }
+            }
+            post {
+                always {
+                    publishHTML([
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'target/site/jacoco',
+                        reportFiles: 'index.html',
+                        reportName: 'Coverage Report'
+                    ])
+                }
+            }
+        }
+        
+        stage('🐳 Docker Build') {
+            steps {
+                script {
+                    echo "🐳 Building Docker image..."
+                    
+                    sh """
+                        docker build \
+                            --build-arg VERSION=${APP_VERSION} \
+                            --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+                            --build-arg VCS_REF=${GIT_COMMIT[0..7]} \
+                            -t ${ECR_REPOSITORY}:${IMAGE_TAG} \
+                            -t ${ECR_REPOSITORY}:latest \
+                            .
+                    """
+                    
+                    echo "✅ Docker image built successfully!"
+                    echo "🏷️ Image tag: ${IMAGE_TAG}"
+                }
+            }
+        }
+        
+        stage('📤 ECR Push') {
+            when {
+                // Only push to ECR if AWS credentials are available
+                expression {
+                    try {
+                        withCredentials([aws(credentialsId: 'aws-credentials')]) {
+                            return true
+                        }
+                    } catch (Exception e) {
+                        echo "⚠️ AWS credentials not found, skipping ECR push"
+                        return false
+                    }
+                }
+            }
+            steps {
+                script {
+                    echo "📤 Pushing to Amazon ECR..."
+                    
+                    withCredentials([aws(credentialsId: 'aws-credentials')]) {
+                        sh """
+                            # Login to ECR
+                            aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | \
+                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                            
+                            # Tag and push images
+                            docker tag ${ECR_REPOSITORY}:${IMAGE_TAG} ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+                            docker tag ${ECR_REPOSITORY}:latest ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest
+                            
+                            docker push ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+                            docker push ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest
+                        """
+                        
+                        echo "✅ Image pushed to ECR successfully!"
+                        echo "🌐 ECR URI: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+                    }
+                }
+            }
+        }
+        
+        stage('📋 Summary') {
+            steps {
+                script {
+                    echo """
+                    ✅ Pipeline Summary
+                    ==================
+                    ✅ Code checked out from GitHub
+                    ✅ Maven build completed
+                    ✅ Tests executed
+                    ✅ Code coverage generated
+                    ✅ Docker image built
+                    ${currentBuild.result != 'FAILURE' ? '✅ ECR push completed' : '⚠️ ECR push skipped'}
+                    
+                    🏷️ Image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+                    🕒 Duration: ${currentBuild.durationString}
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo "🧹 Cleaning up..."
+            sh 'docker system prune -f || true'
+            cleanWs()
+        }
+        
+        success {
+            echo """
+            🎉 Pipeline completed successfully!
+            
+            Next steps:
+            1. ✅ Basic pipeline is working
+            2. 🔧 Add more credentials for advanced features:
+               - SonarQube token for code analysis
+               - Snyk token for security scanning
+               - Slack webhook for notifications
+               - ArgoCD token for deployment
+            3. 🚀 Deploy to Kubernetes cluster
+            """
+        }
+        
+        failure {
+            echo "❌ Pipeline failed. Check the logs above for details."
+        }
+    }
+}

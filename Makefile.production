@@ -1,0 +1,60 @@
+.PHONY: help prod-up prod-down prod-logs prod-status prod-backup prod-restore
+
+# Production commands
+prod-up:
+	@echo "Starting production environment..."
+	docker-compose pull
+	docker-compose up -d
+	@echo "Waiting for services to be healthy..."
+	@sleep 10
+	@make prod-status
+
+prod-down:
+	@echo "Stopping production environment..."
+	docker-compose down
+
+prod-restart:
+	@echo "Restarting production environment..."
+	docker-compose restart
+
+prod-logs:
+	docker-compose logs -f --tail=100
+
+prod-status:
+	@echo "Service Status:"
+	@docker-compose ps
+	@echo "\nHealth Checks:"
+	@curl -s http://localhost/health | jq '.' || echo "App health check failed"
+	@docker exec eks-products-redis redis-cli -a ${REDIS_PASSWORD:-StrongP@ssw0rd2024!} ping || echo "Redis health check failed"
+
+# Backup and restore
+prod-backup:
+	@echo "Creating backup..."
+	@mkdir -p backups
+	@docker exec eks-products-redis redis-cli -a ${REDIS_PASSWORD:-StrongP@ssw0rd2024!} BGSAVE
+	@tar -czf backups/backup-$(shell date +%Y%m%d-%H%M%S).tar.gz data/
+	@echo "Backup completed"
+
+prod-restore:
+	@echo "Restoring from backup..."
+	@test -f $(BACKUP_FILE) || (echo "BACKUP_FILE not specified" && exit 1)
+	@docker-compose down
+	@tar -xzf $(BACKUP_FILE) -C ./
+	@docker-compose up -d
+	@echo "Restore completed"
+
+# Monitoring
+prod-metrics:
+	@open http://localhost:9091  # Prometheus
+
+# Security scan
+prod-security-scan:
+	@docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+		aquasec/trivy image eks-products:latest
+
+# Performance test
+prod-load-test:
+	@docker run --rm -v $(PWD):/data \
+		skandyla/wrk -t12 -c400 -d30s \
+		--script=/data/load-test.lua \
+		http://host.docker.internal/api/products/PROD-001/price

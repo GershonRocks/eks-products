@@ -1,0 +1,13 @@
+# Copy these environment variables to Jenkins Pipeline configuration
+# Go to Jenkins → Pipeline → Environment
+
+AWS_DEFAULT_REGION=us-east-1
+AWS_ACCOUNT_ID=720184961863
+ECR_REGISTRY=720184961863.dkr.ecr.us-east-1.amazonaws.com/eks-products
+ECR_REPOSITORY=eks-products
+DOCKER_BUILDKIT=1
+MAVEN_OPTS=-Xmx2048m -XX:MaxPermSize=512m
+ARGOCD_SERVER=a63fcb8006e954365acf09db02370924-1782938217.us-east-1.elb.amazonaws.com
+K8S_CLUSTER_NAME=eks-products-cluster
+APP_NAME=eks-products
+HELM_CHART_PATH=helm/eks-products

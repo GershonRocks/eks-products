@@ -1,0 +1,71 @@
+# Multi-stage build for production
+FROM maven:3.9-eclipse-temurin-21-alpine AS builder
+
+# Build arguments
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION
+
+WORKDIR /app
+
+# Copy pom.xml and download dependencies
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+
+# Copy source and build
+COPY src ./src
+RUN mvn clean package -DskipTests -B && \
+    mv target/*.jar target/app.jar
+
+# Runtime stage
+FROM eclipse-temurin:21-jre-alpine
+
+# Install necessary packages
+RUN apk add --no-cache \
+    bash \
+    curl \
+    su-exec \
+    tzdata \
+    && rm -rf /var/cache/apk/*
+
+# Create app user and directories
+RUN addgroup -g 1000 -S appuser && \
+    adduser -u 1000 -S appuser -G appuser && \
+    mkdir -p /app/data /app/logs /app/config && \
+    chown -R appuser:appuser /app
+
+WORKDIR /app
+
+# Copy JAR from builder
+COPY --from=builder --chown=appuser:appuser /app/target/app.jar .
+
+# Add metadata labels
+LABEL org.label-schema.build-date=$BUILD_DATE \
+      org.label-schema.vcs-ref=$VCS_REF \
+      org.label-schema.version=$VERSION \
+      org.label-schema.name="eks-products" \
+      org.label-schema.description="Production-grade EKS Products Microservice" \
+      org.label-schema.vendor="gershonrocks" \
+      org.label-schema.schema-version="1.0"
+
+# Switch to non-root user
+USER appuser
+
+# JVM optimizations for containers
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 \
+               -XX:+UseG1GC \
+               -XX:MaxGCPauseMillis=100 \
+               -XX:+UseStringDeduplication \
+               -XX:+ParallelRefProcEnabled \
+               -XX:+AlwaysPreTouch \
+               -XX:+UnlockExperimentalVMOptions \
+               -XX:+UseCGroupMemoryLimitForHeap \
+               -Djava.security.egd=file:/dev/./urandom \
+               -Duser.timezone=UTC"
+
+EXPOSE 8080 9090
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:8080/actuator/health || exit 1
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

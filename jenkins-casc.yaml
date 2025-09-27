@@ -1,0 +1,169 @@
+# Jenkins Configuration as Code (JCasC)
+# This file defines Jenkins configuration including plugins, credentials, and jobs
+
+jenkins:
+  systemMessage: "EKS Products CI/CD Pipeline - Configured via JCasC"
+  
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+          
+  authorizationStrategy:
+    roleBased:
+      roles:
+        global:
+          - name: "admin"
+            description: "Jenkins administrators"
+            permissions:
+              - "Overall/Administer"
+            assignments:
+              - "admin"
+          - name: "developer"
+            description: "Developers with build permissions"
+            permissions:
+              - "Overall/Read"
+              - "Job/Build"
+              - "Job/Read"
+              - "Job/Workspace"
+            assignments:
+              - "developers"
+
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: "AWS_DEFAULT_REGION"
+            value: "us-east-1"
+          - key: "DOCKER_BUILDKIT"
+            value: "1"
+
+# Tool configurations
+tool:
+  maven:
+    installations:
+      - name: "Maven-3.9"
+        properties:
+          - installSource:
+              installers:
+                - maven:
+                    id: "3.9.5"
+                    
+  jdk:
+    installations:
+      - name: "OpenJDK-21"
+        properties:
+          - installSource:
+              installers:
+                - adoptOpenJdkInstaller:
+                    id: "jdk-21.0.1+12"
+
+  git:
+    installations:
+      - name: "Default"
+        home: "git"
+
+  dockerTool:
+    installations:
+      - name: "Docker"
+        properties:
+          - installSource:
+              installers:
+                - dockerInstaller:
+                    version: "latest"
+
+# Credentials configuration
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          # AWS Credentials
+          - aws:
+              accessKey: "${AWS_ACCESS_KEY_ID}"
+              secretKey: "${AWS_SECRET_ACCESS_KEY}"
+              description: "AWS credentials for ECR and EKS access"
+              id: "aws-credentials"
+              scope: GLOBAL
+              
+          # SonarQube Token
+          - string:
+              description: "SonarQube authentication token"
+              id: "sonar-token"
+              scope: GLOBAL
+              secret: "${SONAR_TOKEN}"
+              
+          # Snyk Token
+          - string:
+              description: "Snyk authentication token"
+              id: "snyk-token"
+              scope: GLOBAL
+              secret: "${SNYK_TOKEN}"
+              
+          # ArgoCD Token
+          - string:
+              description: "ArgoCD authentication token"
+              id: "argocd-auth-token"
+              scope: GLOBAL
+              secret: "${ARGOCD_AUTH_TOKEN}"
+              
+          # Slack Webhook
+          - string:
+              description: "Slack webhook URL for notifications"
+              id: "slack-webhook"
+              scope: GLOBAL
+              secret: "${SLACK_WEBHOOK_URL}"
+
+# Global pipeline libraries
+unclassified:
+  globalLibraries:
+    libraries:
+      - name: "eks-products-pipeline-library"
+        defaultVersion: "main"
+        retriever:
+          modernSCM:
+            scm:
+              git:
+                remote: "https://github.com/GershonRocks/eks-products.git"
+                
+  # SonarQube configuration
+  sonarGlobalConfiguration:
+    installations:
+      - name: "SonarQube"
+        serverUrl: "${SONAR_HOST_URL}"
+        credentialsId: "sonar-token"
+        
+  # Slack configuration
+  slackNotifier:
+    teamDomain: "your-workspace"
+    token: "${SLACK_WEBHOOK_URL}"
+    sendAsText: false
+
+# Job DSL configuration
+jobs:
+  - script: |
+      multibranchPipelineJob('eks-products-pipeline') {
+          displayName('EKS Products CI/CD Pipeline')
+          description('Multi-branch pipeline for EKS Products application')
+          
+          branchSources {
+              git {
+                  id('eks-products')
+                  remote('https://github.com/GershonRocks/eks-products.git')
+                  credentialsId('github-credentials')
+              }
+          }
+          
+          factory {
+              workflowBranchProjectFactory {
+                  scriptPath('Jenkinsfile')
+              }
+          }
+          
+          configure { node ->
+              node / 'triggers' / 'com.cloudbees.hudson.plugins.folder.computed.PeriodicFolderTrigger' {
+                  spec('H/5 * * * *')  // Poll every 5 minutes
+                  interval(300000)
+              }
+          }
+      }
