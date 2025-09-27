@@ -79,6 +79,9 @@ pipeline {
                     try {
                         // Install Maven if not available
                         sh '''
+                            # Save current directory
+                            WORKSPACE_DIR=$(pwd)
+
                             # Check if Maven is available
                             if ! command -v mvn > /dev/null 2>&1; then
                                 echo "📦 Installing Maven..."
@@ -108,11 +111,17 @@ pipeline {
 
                                     tar xzf apache-maven-3.9.9-bin.tar.gz
                                     rm -f apache-maven-3.9.9-bin.tar.gz
+
+                                    # Return to workspace directory
+                                    cd "$WORKSPACE_DIR"
                                 fi
 
                                 export PATH=/tmp/apache-maven-3.9.9/bin:$PATH
                                 export M2_HOME=/tmp/apache-maven-3.9.9
                             fi
+
+                            # Ensure we're in the workspace directory
+                            cd "$WORKSPACE_DIR"
 
                             # Ensure Java is available
                             export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
@@ -136,6 +145,15 @@ pipeline {
 
                             # Verify Maven is available
                             mvn --version
+
+                            # Show current directory and check for pom.xml
+                            echo "Current directory: $(pwd)"
+                            if [ ! -f "pom.xml" ]; then
+                                echo "ERROR: pom.xml not found in $(pwd)"
+                                echo "Directory contents:"
+                                ls -la
+                                exit 1
+                            fi
 
                             # Clean and compile
                             mvn clean compile -DskipTests=true
