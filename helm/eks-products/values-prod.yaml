@@ -22,7 +22,7 @@ autoscaling:
 
 persistence:
   enabled: true
-  storageClass: "gp3"
+  storageClass: "gp2"
   size: 10Gi
 
 redis:
@@ -30,3 +30,4 @@ redis:
   master:
     persistence:
       size: 5Gi
+      storageClass: "gp2"
