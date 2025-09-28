@@ -119,7 +119,7 @@ configMap:
           hibernate:
             ddl-auto: update
         redis:
-          host: {{ .Release.Name }}-redis-master
+          host: eks-products-prod-redis-master
           port: 6379
         cache:
           type: redis

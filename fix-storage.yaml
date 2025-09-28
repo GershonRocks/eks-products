@@ -1,0 +1,13 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: eks-products-prod
+  namespace: argocd
+spec:
+  source:
+    helm:
+      parameters:
+      - name: persistence.storageClass
+        value: gp2
+      - name: redis.master.persistence.storageClass
+        value: gp2
